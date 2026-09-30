@@ -1,0 +1,287 @@
+import { memo } from 'react';
+import { GestureResponderEvent, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Icon } from 'react-native-paper';
+import { theme } from '../../../../theme/theme';
+import { SalesTask } from '../types/tasks';
+
+type Props = {
+  task: SalesTask;
+  width: `${number}%`;
+  index: number;
+  onUpdateMeeting?: (task: SalesTask) => void;
+  onOpenDetails?: (task: SalesTask) => void;
+  highlightTaskLabel?: boolean;
+};
+
+const cardTones = [
+  { accent: '#2563EB', soft: '#EFF6FF', border: '#DBEAFE' },
+  { accent: '#8B5CF6', soft: '#F5F3FF', border: '#EDE9FE' },
+  { accent: '#F97316', soft: '#FFF7ED', border: '#FFEDD5' },
+  { accent: '#16A34A', soft: '#F0FDF4', border: '#DCFCE7' },
+] as const;
+
+export const SalesTaskCard = memo(function SalesTaskCard({ task, width, index, onUpdateMeeting, onOpenDetails, highlightTaskLabel = false }: Props) {
+  const tone = cardTones[index % cardTones.length];
+  const isRemovedLead = task.taskKind === 'LEAD'
+    && (task.leadStatus === 'REMOVED' || task.leadStatus === 'NOT_INTERESTED');
+  const isVerificationPending = task.verificationPending === true;
+  const whatsappNumber = task.phone.replace(/\D/g, '');
+  const dialerNumber = task.phone.replace(/[^\d+]/g, '');
+  const mapUrl = `https://www.google.com/maps/search/?api=1&query=${task.coordinates.latitude},${task.coordinates.longitude}`;
+  const openContactLink = (event: GestureResponderEvent, url: string) => {
+    event.stopPropagation();
+    void Linking.openURL(url);
+  };
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Open details for ${task.name}, ${task.taskLabel}`}
+      onPress={() => onOpenDetails?.(task)}
+      style={({ pressed }) => [
+        styles.card,
+        { flexBasis: width, borderColor: tone.border },
+        pressed && styles.cardPressed,
+      ]}
+    >
+      <View style={styles.header}>
+        <View style={styles.identity}>
+          <Text numberOfLines={1} style={styles.name}>{task.name}</Text>
+          <View style={styles.contactActions}>
+            {task.hasLocationPin ? (
+              <Pressable
+                accessibilityRole="link"
+                accessibilityLabel={`Open captured meeting location for ${task.name} in Google Maps`}
+                hitSlop={6}
+                onPress={(event) => openContactLink(event, mapUrl)}
+                style={({ pressed }) => [
+                  styles.contactButton,
+                  styles.locationButton,
+                  pressed && styles.contactButtonPressed,
+                ]}
+              >
+                <Icon source="map-marker" size={15} color={tone.accent} />
+              </Pressable>
+            ) : null}
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel={`Open WhatsApp chat with ${task.name}`}
+              hitSlop={6}
+              onPress={(event) => openContactLink(event, `https://wa.me/${whatsappNumber}`)}
+              style={({ pressed }) => [
+                styles.contactButton,
+                styles.whatsappButton,
+                pressed && styles.contactButtonPressed,
+              ]}
+            >
+              <Icon source="whatsapp" size={15} color="#16A34A" />
+            </Pressable>
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel={`Call ${task.name}`}
+              hitSlop={6}
+              onPress={(event) => openContactLink(event, `tel:${dialerNumber}`)}
+              style={({ pressed }) => [
+                styles.contactButton,
+                styles.callButton,
+                pressed && styles.contactButtonPressed,
+              ]}
+            >
+              <Icon source="phone" size={14} color="#2563EB" />
+            </Pressable>
+          </View>
+        </View>
+        <View style={[styles.stageBadge, highlightTaskLabel && styles.highlightedStageBadge, { backgroundColor: tone.soft, borderColor: tone.accent }]}>
+          <Text style={[styles.stageText, highlightTaskLabel && styles.highlightedStageText, { color: tone.accent }]}>
+            {task.taskKind === 'LEAD' ? 'Prospect' : task.taskLabel}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.locationRow}>
+        <Icon source="map-marker-outline" size={15} color={tone.accent} />
+        <View style={styles.locationCopy}>
+          <Text numberOfLines={1} style={styles.location}>{task.locationText || 'Location unavailable'}</Text>
+        </View>
+      </View>
+
+      {isVerificationPending ? (
+        <View style={styles.verificationPendingBadge}>
+          <Icon source="clock-alert-outline" size={12} color="#B45309" />
+          <Text style={styles.verificationPendingText}>Verification Pending</Text>
+        </View>
+      ) : null}
+
+      <View style={[styles.remarks, { backgroundColor: tone.soft }]}>
+        <View style={styles.remarksHeader}>
+          <Text style={styles.remarksLabel}>Remarks</Text>
+          <Icon source="arrow-top-right" size={14} color={tone.accent} />
+        </View>
+        <Text numberOfLines={2} style={styles.remarksText}>{task.remarks}</Text>
+      </View>
+
+      <View style={styles.footer}>
+        <View style={styles.dateBlock}>
+          <Text style={styles.dateLabel}>Last updated</Text>
+          <Text numberOfLines={1} style={styles.dateValue}>{task.lastUpdated}</Text>
+        </View>
+        <View style={styles.footerDivider} />
+        <View style={styles.dateBlock}>
+          <Text style={styles.dateLabel}>Next follow-up</Text>
+          <Text numberOfLines={1} style={[styles.dateValue, { color: tone.accent }]}>
+            {task.nextFollowUpDate}
+          </Text>
+        </View>
+        {!isRemovedLead ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Update meeting for ${task.name}`}
+            accessibilityState={{ disabled: isVerificationPending }}
+            disabled={isVerificationPending}
+            onPress={(event) => {
+              event.stopPropagation();
+              if (isVerificationPending) return;
+              onUpdateMeeting?.(task);
+            }}
+            style={({ pressed }) => [
+              styles.updateMeetingButton,
+              { borderColor: tone.accent, backgroundColor: tone.accent },
+              isVerificationPending && styles.updateMeetingButtonDisabled,
+              pressed && styles.contactButtonPressed,
+            ]}
+          >
+            <Icon source="calendar-edit" size={12} color="#FFFFFF" />
+            <Text style={styles.updateMeetingText}>Update Meeting</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+});
+
+const styles = StyleSheet.create({
+  card: {
+    minWidth: 0,
+    flexGrow: 0,
+    flexShrink: 0,
+    padding: theme.spacing.md,
+    gap: theme.spacing.sm,
+    borderWidth: 1,
+    borderRadius: theme.radius.lg,
+    backgroundColor: theme.colors.surface,
+    ...theme.shadow.card,
+  },
+  cardPressed: {
+    opacity: 0.82,
+  },
+  header: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
+  identity: {
+    minWidth: 0,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  name: { minWidth: 0, flex: 1, color: theme.colors.text, fontSize: 13, lineHeight: 18, fontWeight: '900' },
+  contactActions: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  contactButton: {
+    width: 25,
+    height: 25,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  locationButton: {
+    borderColor: '#DDD6FE',
+    backgroundColor: '#F5F3FF',
+  },
+  whatsappButton: {
+    borderColor: '#BBF7D0',
+    backgroundColor: '#F0FDF4',
+  },
+  callButton: {
+    borderColor: '#BFDBFE',
+    backgroundColor: '#EFF6FF',
+  },
+  contactButtonPressed: {
+    opacity: 0.6,
+    transform: [{ scale: 0.94 }],
+  },
+  stageBadge: { paddingHorizontal: theme.spacing.sm, paddingVertical: 5, borderRadius: 999 },
+  highlightedStageBadge: { borderWidth: 1, paddingHorizontal: theme.spacing.md, paddingVertical: 6 },
+  stageText: { fontSize: 8, lineHeight: 10, fontWeight: '900' },
+  highlightedStageText: { fontSize: 9, lineHeight: 12, letterSpacing: 0.25, textTransform: 'uppercase' },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  locationCopy: { minWidth: 0, flex: 1 },
+  location: { minWidth: 0, flex: 1, color: theme.colors.muted, fontSize: 10, fontWeight: '700' },
+  verificationPendingBadge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: '#FFF7E8',
+    borderWidth: 1,
+    borderColor: '#FCD9A3',
+  },
+  verificationPendingText: { color: '#B45309', fontSize: 8, lineHeight: 10, fontWeight: '900' },
+  remarks: {
+    minHeight: 30,
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 5,
+    borderRadius: theme.radius.sm,
+  },
+  remarksHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  remarksLabel: {
+    color: theme.colors.muted,
+    fontSize: 7,
+    lineHeight: 10,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  remarksText: { color: theme.colors.text, fontSize: 9, lineHeight: 14, fontWeight: '600' },
+  footer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    paddingTop: theme.spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  dateBlock: { minWidth: 0, flex: 1 },
+  dateLabel: { color: theme.colors.subtle, fontSize: 7, lineHeight: 10, fontWeight: '800', textTransform: 'uppercase' },
+  dateValue: { color: theme.colors.text, fontSize: 9, lineHeight: 13, fontWeight: '800' },
+  footerDivider: { width: 1, height: 25, backgroundColor: theme.colors.border },
+  updateMeetingButton: {
+    minHeight: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingHorizontal: 7,
+    borderWidth: 1,
+    borderRadius: 7,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.12,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  updateMeetingButtonDisabled: { opacity: 0.5 },
+  updateMeetingText: {
+    color: '#FFFFFF',
+    fontSize: 8,
+    lineHeight: 10,
+    fontWeight: '900',
+  },
+});
